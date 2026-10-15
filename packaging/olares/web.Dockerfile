@@ -1,5 +1,7 @@
 # syntax=docker/dockerfile:1
 # Olares web image: the trunk build of apps/wordcraft-web served by nginx on :8080.
+# With ./craft-fonts checked out, the wasm embeds its UI face and the Simplified Chinese face is
+# served beside it for apps/wordcraft-web to fetch when the interface is Chinese.
 # Build from the repository root: docker build -f packaging/olares/web.Dockerfile .
 ARG RUST_VERSION=1.99
 ARG NGINX_VERSION=1.28-alpine
@@ -37,8 +39,16 @@ ARG WORDCRAFT_BUILD_DATE=
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
     --mount=type=cache,target=/root/.cache/trunk \
-    trunk build --release --locked \
+    if [ -f /src/craft-fonts/fonts/manifest.txt ]; then \
+        export CRAFT_FONTS_DIR=/src/craft-fonts CRAFT_FONTS_REQUIRED=1; \
+    fi \
+    && trunk build --release --locked \
     && test -s /src/dist/web/index.html \
+    && if [ -f /src/craft-fonts/fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf ]; then \
+        mkdir -p /src/dist/web/fonts/noto-sans-cjk-sc \
+        && cp /src/craft-fonts/fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf /src/craft-fonts/fonts/noto-sans-cjk-sc/OFL.txt /src/dist/web/fonts/noto-sans-cjk-sc/ \
+        && gzip -9 -k /src/dist/web/fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf; \
+    fi \
     && gzip -9 -k /src/dist/web/*.wasm /src/dist/web/*.js /src/dist/web/index.html
 
 FROM nginx:${NGINX_VERSION} AS runtime

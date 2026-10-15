@@ -38,9 +38,23 @@ pub struct CraftFont {
 
 include!(concat!(env!("OUT_DIR"), "/craft_fonts.rs"));
 
+static ADDED_CRAFT_FONTS: std::sync::RwLock<Vec<&'static CraftFont>> = std::sync::RwLock::new(Vec::new());
+
+/// Add a craft-fonts face the binary doesn't embed (the web build fetches its Chinese interface
+/// face at startup). Documents see it only when added before the first [`FontDb::global`].
+pub fn add_craft_font(f: CraftFont) {
+    ADDED_CRAFT_FONTS.write().unwrap_or_else(|e| e.into_inner()).push(Box::leak(Box::new(f)));
+}
+
+/// The embedded craft-fonts faces ([`CRAFT_FONTS`]), then those added with [`add_craft_font`].
+pub fn craft_fonts() -> Vec<&'static CraftFont> {
+    let added = ADDED_CRAFT_FONTS.read().unwrap_or_else(|e| e.into_inner());
+    CRAFT_FONTS.iter().chain(added.iter().copied()).collect()
+}
+
 /// The craft-fonts faces for Japanese (`"Jpan"`), in manifest order. Empty without craft-fonts.
 pub fn japanese_fonts() -> impl Iterator<Item = &'static CraftFont> {
-    CRAFT_FONTS.iter().filter(|f| f.scripts.contains(&"Jpan"))
+    craft_fonts().into_iter().filter(|f| f.scripts.contains(&"Jpan"))
 }
 
 /// Japanese faces in document-fallback order: Mincho (serif) families first, matching the
@@ -62,12 +76,12 @@ pub fn japanese_ui_fonts(bold: bool) -> Vec<&'static CraftFont> {
 /// The craft-fonts faces for Simplified Chinese (`"Hans"`), in manifest order. Empty without
 /// craft-fonts.
 pub fn chinese_fonts() -> impl Iterator<Item = &'static CraftFont> {
-    CRAFT_FONTS.iter().filter(|f| f.scripts.contains(&"Hans"))
+    craft_fonts().into_iter().filter(|f| f.scripts.contains(&"Hans"))
 }
 
 /// The craft-fonts faces for Korean (`"Kore"`), in manifest order. Empty without craft-fonts.
 pub fn korean_fonts() -> impl Iterator<Item = &'static CraftFont> {
-    CRAFT_FONTS.iter().filter(|f| f.scripts.contains(&"Kore"))
+    craft_fonts().into_iter().filter(|f| f.scripts.contains(&"Kore"))
 }
 
 /// The CJK interface faces, Regular styles only (the UI fakes no bold), with the Japanese UI,

@@ -27,6 +27,9 @@ pub fn start() {
             log::error!("missing <canvas id=\"{CANVAS_ID}\">");
             return;
         };
+        if wordcraft_ui_egui::i18n::system_lang().prefers_hans() {
+            load_hans_font(&document).await;
+        }
         let dirty = Rc::new(Cell::new(false));
         let saves = AsyncSaves::default();
         if let Err(e) = guard_unload(dirty.clone(), saves.clone()) {
@@ -80,6 +83,37 @@ pub fn start() {
             }
         }
     });
+}
+
+/// Where a deployment may serve the Simplified Chinese interface face (craft-fonts' path). The web
+/// build embeds only BIZ UDPGothic, which lacks many simplified hanzi.
+const HANS_FONT_URL: &str = "fonts/noto-sans-cjk-sc/NotoSansCJKsc-Regular.otf";
+
+/// Fetch the Simplified Chinese face before the app starts, so the first frame's menus and the
+/// document fonts have it. Without the file (a host that doesn't serve it) the app starts as before.
+async fn load_hans_font(document: &web_sys::Document) {
+    let Some(window) = web_sys::window() else { return };
+    if let Some(el) = document.get_element_by_id(LOADING_ID) {
+        el.set_text_content(Some("正在加载中文字体…"));
+    }
+    let fetched = async {
+        let resp: web_sys::Response = wasm_bindgen_futures::JsFuture::from(window.fetch_with_str(HANS_FONT_URL)).await?.dyn_into()?;
+        if !resp.ok() {
+            return Err(wasm_bindgen::JsValue::from_str(&format!("HTTP {}", resp.status())));
+        }
+        let buf = wasm_bindgen_futures::JsFuture::from(resp.array_buffer()?).await?;
+        Ok(js_sys::Uint8Array::new(&buf).to_vec())
+    }
+    .await;
+    match fetched {
+        Ok(bytes) => wordcraft_fonts::add_craft_font(wordcraft_fonts::CraftFont {
+            family: "Noto Sans CJK SC",
+            style: "Regular",
+            scripts: &["Hans", "Latn"],
+            bytes: Box::leak(bytes.into_boxed_slice()),
+        }),
+        Err(e) => log::warn!("{HANS_FONT_URL}: {e:?}"),
+    }
 }
 
 fn query() -> String {

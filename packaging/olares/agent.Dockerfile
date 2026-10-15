@@ -12,7 +12,10 @@ ARG WORDCRAFT_BUILD_SHA=
 ARG WORDCRAFT_BUILD_DATE=
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
-    cargo build --release --locked -p wordcraft-cli \
+    if [ -f /src/craft-fonts/fonts/manifest.txt ]; then \
+        export CRAFT_FONTS_DIR=/src/craft-fonts CRAFT_FONTS_REQUIRED=1; \
+    fi \
+    && cargo build --release --locked -p wordcraft-cli \
     && install -m 0755 target/release/wordcraft-cli /usr/local/bin/wordcraft-cli
 
 FROM node:${NODE_VERSION} AS runtime
